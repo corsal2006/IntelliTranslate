@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IntelliTranslate | SIH Project</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        (function() {
+            const theme = localStorage.getItem('theme');
+            if (theme === 'dark') {
+                document.body.classList.add('dark-mode');
+            } else if (theme === 'light') {
+                document.body.classList.remove('dark-mode');
+            } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.body.classList.add('dark-mode');
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-content">
+                <h1>IntelliTranslate ✨</h1>
+                <p>AI-Powered Document Translation for Nepali & Sinhalese</p>
+            </div>
+            <div class="theme-switch-wrapper">
+                <div class="theme-toggle-option" id="light-theme-option">
+                    <span class="theme-icon">☀️</span>
+                    <span class="theme-label">Light</span>
+                </div>
+                <label class="theme-switch" for="theme-toggle">
+                    <input type="checkbox" id="theme-toggle" />
+                    <span class="slider"></span>
+                </label>
+                <div class="theme-toggle-option" id="dark-theme-option">
+                    <span class="theme-icon">🌙</span>
+                    <span class="theme-label">Dark</span>
+                </div>
+            </div>
+        </header>
+
+        <div id="upload-stage">
+            <form id="upload-form">
+                <div class="form-group">
+                    <label for="language">1. Select Source Language:</label>
+                    <select name="language" id="language" required>
+                        <option value="" disabled selected>-- Choose a language --</option>
+                        <option value="nep">Nepali</option>
+                        <option value="sin">Sinhalese</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="file">2. Upload Document (Image or PDF):</label>
+                    <div id="drop-zone">
+                        <div id="drop-zone-prompt"><img src="https://img.icons8.com/fluency/96/upload-to-cloud.png" alt="Upload Icon"><p><strong>Drag & Drop</strong> your file here</p><p class="small-text">or click to select a file</p></div>
+                        <div id="preview-container" class="hidden"><img id="image-preview" src="#" alt="Image Preview"><div id="file-info"></div></div>
+                        <input type="file" name="file" id="file-input" required accept=".png,.jpg,.jpeg,.pdf">
+                    </div>
+                </div>
+                <button type="submit" class="submit-btn" id="translate-btn"><span class="btn-text">Translate Document</span><div class="spinner hidden"></div></button>
+            </form>
+        </div>
+
+        <div id="results-stage" class="hidden">
+            <div class="results-header">
+                <h2>Translation Results</h2>
+                <div class="header-controls">
+                    <div id="page-nav" class="hidden"><button id="prev-page-btn" class="nav-btn">‹ Prev</button><span id="page-indicator">Page 1 of 1</span><button id="next-page-btn" class="nav-btn">Next ›</button></div>
+                    <div class="export-controls"><button id="export-txt-btn" class="export-btn">Export .txt</button><button id="export-csv-btn" class="export-btn">Export .csv</button></div>
+                    <button id="start-over-btn">Translate Another</button>
+                </div>
+            </div>
+            <div class="results-grid">
+                <div class="result-box" id="image-display-box"><h3>Original Document</h3><div id="image-container"></div></div>
+                <div class="result-box"><div class="text-results-grid"><div class="text-column"><h3>Extracted Text (Original)</h3><div id="original-text-container" class="text-container"></div></div><div class="text-column"><h3>Translated Text (English)</h3><div id="translation-container" class="text-container"></div></div></div></div>
+            </div>
+            <div id="feedback-section">
+                <h3>Help Us Improve</h3>
+                <p>Noticed an issue or have a suggestion? Let us know!</p>
+                <textarea id="feedback-input" placeholder="Type your feedback here..."></textarea>
+                <button id="submit-feedback-btn" class="submit-btn">Submit Feedback</button>
+                <p id="feedback-thanks" class="hidden">✔ Thank you for your feedback!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- All the existing JavaScript remains here ---
+        let fullResultData = null, currentPage = 0;
+        const dropZone = document.getElementById('drop-zone'), fileInput = document.getElementById('file-input'), dropZonePrompt = document.getElementById('drop-zone-prompt'), previewContainer = document.getElementById('preview-container'), imagePreview = document.getElementById('image-preview'), fileInfo = document.getElementById('file-info'), uploadForm = document.getElementById('upload-form'), uploadStage = document.getElementById('upload-stage'), resultsStage = document.getElementById('results-stage'), startOverBtn = document.getElementById('start-over-btn'), translateBtn = document.getElementById('translate-btn'), btnText = document.querySelector('.btn-text'), spinner = document.querySelector('.spinner'), imageContainer = document.getElementById('image-container'), originalTextContainer = document.getElementById('original-text-container'), translationContainer = document.getElementById('translation-container'), pageNav = document.getElementById('page-nav'), prevPageBtn = document.getElementById('prev-page-btn'), nextPageBtn = document.getElementById('next-page-btn'), pageIndicator = document.getElementById('page-indicator'), exportTxtBtn = document.getElementById('export-txt-btn'), exportCsvBtn = document.getElementById('export-csv-btn'), feedbackInput = document.getElementById('feedback-input'), submitFeedbackBtn = document.getElementById('submit-feedback-btn'), feedbackThanks = document.getElementById('feedback-thanks');
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFile(e.dataTransfer.files[0]); } });
+        fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+        function handleFile(file) { dropZonePrompt.classList.add('hidden'); previewContainer.classList.remove('hidden'); fileInfo.textContent = `File: ${file.name}`; if (file.type.startsWith('image/')) { const reader = new FileReader(); reader.onload = (e) => { imagePreview.src = e.target.result; }; reader.readAsDataURL(file); } else { imagePreview.src = 'https://img.icons8.com/fluency/96/adobe-pdf-2.png'; } }
+        uploadForm.addEventListener('submit', async (e) => { e.preventDefault(); const formData = new FormData(uploadForm); btnText.classList.add('hidden'); spinner.classList.remove('hidden'); translateBtn.disabled = true; try { const response = await fetch('/upload', { method: 'POST', body: formData }); if (!response.ok) { const errorData = await response.json().catch(() => ({error: "Server error page."})); throw new Error(errorData.error || `Error: ${response.statusText}`); } fullResultData = await response.json(); currentPage = 0; displayPage(currentPage); uploadStage.classList.add('hidden'); resultsStage.classList.remove('hidden'); } catch (error) { alert(`Error: ${error.message}`); } finally { btnText.classList.remove('hidden'); spinner.classList.add('hidden'); translateBtn.disabled = false; } });
+        function displayPage(pageIndex) { imageContainer.innerHTML = ''; originalTextContainer.innerHTML = ''; translationContainer.innerHTML = ''; const pageData = fullResultData.pages[pageIndex], uploadedFile = fileInput.files[0], isImage = uploadedFile.type.startsWith('image/'), isPdf = uploadedFile.name.toLowerCase().endsWith('.pdf'); if (pageData.length === 0) { originalTextContainer.innerHTML = "<p class='empty-text'>No text detected.</p>"; translationContainer.innerHTML = "<p class='empty-text'>No translation.</p>"; } else { pageData.forEach((block, index) => { const p_orig = document.createElement('p'); p_orig.textContent = block.text; originalTextContainer.appendChild(p_orig); const p_trans = document.createElement('p'); p_trans.textContent = block.translation; p_trans.dataset.blockIndex = index; translationContainer.appendChild(p_trans); }); } if (isImage) { const objectURL = URL.createObjectURL(uploadedFile); const originalImage = new Image(); originalImage.src = objectURL; originalImage.onload = () => { const scale = imageContainer.clientWidth / originalImage.naturalWidth; imageContainer.appendChild(originalImage); pageData.forEach((block, index) => { const highlightBox = document.createElement('div'); highlightBox.className = 'highlight-box'; const minLeft = Math.min(...block.coords.map(c => c.left)), minTop = Math.min(...block.coords.map(c => c.top)), maxRight = Math.max(...block.coords.map(c => c.left + c.width)), maxBottom = Math.max(...block.coords.map(c => c.top + c.height)); highlightBox.style.left = `${minLeft * scale}px`; highlightBox.style.top = `${minTop * scale}px`; highlightBox.style.width = `${(maxRight - minLeft) * scale}px`; highlightBox.style.height = `${(maxBottom - minTop) * scale}px`; imageContainer.appendChild(highlightBox); const p = translationContainer.querySelector(`p[data-block-index='${index}']`); if(p) { p.addEventListener('mouseover', () => highlightBox.classList.add('active')); p.addEventListener('mouseout', () => highlightBox.classList.remove('active')); } }); URL.revokeObjectURL(objectURL); }; } else { const placeholder = document.createElement('div'); placeholder.className = 'file-placeholder'; placeholder.innerHTML = `<img src="https://img.icons8.com/fluency/96/adobe-pdf-2.png" alt="PDF Icon"><p>${uploadedFile.name}</p><p class="small-text">${isPdf ? `Showing Page ${pageIndex + 1}` : 'Preview only for images'}</p>`; imageContainer.appendChild(placeholder); } if (fullResultData.pages.length > 1) { pageNav.classList.remove('hidden'); pageIndicator.textContent = `Page ${pageIndex + 1} of ${fullResultData.pages.length}`; prevPageBtn.disabled = pageIndex === 0; nextPageBtn.disabled = pageIndex === fullResultData.pages.length - 1; } else { pageNav.classList.add('hidden'); } }
+        prevPageBtn.addEventListener('click', () => { if (currentPage > 0) { currentPage--; displayPage(currentPage); } });
+        nextPageBtn.addEventListener('click', () => { if (currentPage < fullResultData.pages.length - 1) { currentPage++; displayPage(currentPage); } });
+        submitFeedbackBtn.addEventListener('click', async () => { const feedbackText = feedbackInput.value; if (!feedbackText.trim()) { alert('Please enter your feedback before submitting.'); return; } submitFeedbackBtn.disabled = true; submitFeedbackBtn.textContent = 'Submitting...'; try { await fetch('/submit-feedback', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({feedback: feedbackText}) }); feedbackInput.classList.add('hidden'); submitFeedbackBtn.classList.add('hidden'); feedbackThanks.classList.remove('hidden'); } catch (error) { alert('Could not submit feedback. Please try again.'); submitFeedbackBtn.disabled = false; submitFeedbackBtn.textContent = 'Submit Feedback'; } });
+        function escapeCsvField(field) { return `"${(field || "").replace(/"/g, '""')}"`; }
+        exportTxtBtn.addEventListener('click', () => { let content = fullResultData.pages.map((page, i) => `--- PAGE ${i+1} ---\n` + page.map(block => block.translation).join('\n\n')).join('\n\n'); triggerDownload(content, 'translation.txt', 'text/plain'); });
+        exportCsvBtn.addEventListener('click', () => { let content = 'Original Text,Translated Text\n'; fullResultData.pages.forEach(page => { page.forEach(block => { content += `${escapeCsvField(block.text.trim())},${escapeCsvField(block.translation.trim())}\n`; }); }); triggerDownload(content, 'translation.csv', 'text/csv'); });
+        function triggerDownload(content, filename, contentType) { const a = document.createElement('a'); const blob = new Blob([content], {type: contentType}); a.href = URL.createObjectURL(blob); a.download = filename; a.click(); URL.revokeObjectURL(a.href); }
+        startOverBtn.addEventListener('click', () => { resultsStage.classList.add('hidden'); uploadStage.classList.remove('hidden'); uploadForm.reset(); previewContainer.classList.add('hidden'); dropZonePrompt.classList.remove('hidden'); imagePreview.src = '#'; fullResultData = null; currentPage = 0; feedbackInput.value = ''; feedbackInput.classList.remove('hidden'); submitFeedbackBtn.classList.remove('hidden'); submitFeedbackBtn.disabled = false; submitFeedbackBtn.textContent = 'Submit Feedback'; feedbackThanks.classList.add('hidden'); });
+
+        const themeToggle = document.getElementById('theme-toggle');
+        if (document.body.classList.contains('dark-mode')) { themeToggle.checked = true; }
+        themeToggle.addEventListener('change', () => {
+            if (themeToggle.checked) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
+            }
+        });
+    </script>
+</body>
+</html>
